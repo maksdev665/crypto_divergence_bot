@@ -1,0 +1,7 @@
+aiogram
+python-dotenv
+SQLAlchemy
+alembic
+asyncpg
+aiohttp
+ujson
