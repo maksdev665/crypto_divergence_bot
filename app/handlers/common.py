@@ -2,8 +2,9 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from aiogram.exceptions import TelegramBadRequest
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.keyboards.inline_kb import get_start_kb
-from app.handlers.admin.admin_panel import cmd_admin
+from app.handlers.admin.admin_panel import process_admin_panel
 
 router = Router()
 
@@ -72,8 +73,8 @@ async def cb_about(callback: CallbackQuery):
     await callback.answer()
 
 @router.callback_query(F.data == 'admin_panel')
-async def cb_admin_panel(callback: CallbackQuery):
+async def cb_admin_panel(callback: CallbackQuery, session: AsyncSession):
     """Обработчик кнопки 'Админ-панель'"""
     await callback.message.answer('Переход в панель администратора...')
-    await cmd_admin(callback.message)
+    await process_admin_panel(callback.from_user, session)
     await callback.answer()
