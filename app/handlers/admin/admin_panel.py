@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.database.models import Admin, CurrencyPair, BotSettings
+from app.database.models import Admin, CurrencyPair, BotSettings, Divergence
 from app.keyboards.admin_kb import (
     get_admin_main_menu,
     get_bot_control_kb,
@@ -151,3 +151,46 @@ async def cb_bot_deactivate(callback: CallbackQuery, session: AsyncSession):
         parse_mode='HTML'
     )
     await callback.answer('✅ Бот остановлен')
+
+@router.callback_query(F.data == 'show_stats')
+async def cb_show_stats(callback: CallbackQuery, session: AsyncSession):
+    """Показать статистику бота"""
+    # Получаем количество активных пар
+    pairs_query = select(CurrencyPair).where(CurrencyPair.is_active == True)
+    pairs_result = await session.execute(pairs_query)
+    active_pairs_count = len(pairs_result.scalars().all())
+
+    # Получаем общее количество пар
+    all_pairs_query = select(CurrencyPair)
+    all_pairs_result = await session.execute(all_pairs_query)
+    all_pairs_count = len(all_pairs_result.scalars().all())
+
+    # Получаем количество обнаруженных дивергенций
+    divergence_query = select(Divergence)
+    divergence_result = await session.execute(divergence_query)
+    divergence_count = len(divergence_result.scalars().all())
+
+    # Получаем статус бота
+    status_query = select(BotSettings).where(BotSettings.key == 'bot_active')
+    status_result = await session.execute(status_query)
+    status_setting = status_result.scalar_one_or_none()
+
+    is_active = True
+    if status_setting is not None and status_setting.value_bool is not None:
+        is_active = status_setting.value_bool
+
+    status_text = "🟢 Активен" if is_active else "🔴 Остановлен"
+
+    stats_message = (
+        "📊 <b>Статистика бота</b>\n\n"
+        f"Статус бота: {status_text}\n"
+        f"Активных валютных пар: {active_pairs_count}/{all_pairs_count}\n"
+        f"Обнаружено дивергенций: {divergence_count}\n\n"
+    )
+
+    await callback.message.edit_text(
+        stats_message,
+        reply_markup=get_back_kb('admin_main_menu'),
+        parse_mode='HTML'
+    )
+    await callback.answer()

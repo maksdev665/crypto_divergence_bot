@@ -80,7 +80,7 @@ async def check_divergence_task():
 # Функция для запуска бота
 async def main():
     from app.handlers import common
-    from app.handlers.admin import admin_panel
+    from app.handlers.admin import admin_panel, pairs
 
     # Регистрация общие обработчики
     dp.include_router(common.router)
@@ -90,6 +90,12 @@ async def main():
     admin_router.message.middleware(AdminMiddleware())
     admin_router.callback_query.middleware(AdminMiddleware())
     dp.include_router(admin_router)
+
+    # Регистрируем остальные обработчики админ-панели
+    pairs_router = pairs.router
+    pairs_router.message.middleware(AdminMiddleware())
+    pairs_router.callback_query.middleware(AdminMiddleware())
+    dp.include_router(pairs_router)
 
     # Регистрируем middleware для сессии БД для всех обработчиков
     dp.update.middleware(AsyncSessionMiddleware(get_session))

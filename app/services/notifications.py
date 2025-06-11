@@ -75,9 +75,8 @@ class NotificationService:
             logger.error('ID группы для уведомлений не найден')
             return False
         
-        # message = await self.format_divergence_message(divergence)
-        message = await self.test_message()
-        print(group_id)
+        message = await self.format_divergence_message(divergence)
+        
         try:
             await self.bot.send_message(
                 chat_id=group_id,
