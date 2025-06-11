@@ -8,7 +8,10 @@ from sqlalchemy.future import select
 
 from app.config import BOT_TOKEN, CHECK_INTERVAL
 from app.database.engine import get_session
+from app.database.models import BotSettings
 from app.middlewares.admin_middleware import AdminMiddleware
+from app.services.notifications import NotificationService
+
 
 
 # Настройка логирования
@@ -34,6 +37,46 @@ async def set_bot_commands():
     await bot.set_my_commands(commands)
 
 
+async def check_divergence_task():
+    """Фоновая задача для проверки дивергенций между валютными парами"""
+    logger.info('Запуск фоновой задачи проверки дивергенций')
+
+    while True:
+        try:
+            # Создаем новую сессию для каждой итерации
+            async for session in get_session():
+                # Получаем текущий интервал проверки из настроек
+                query = select(BotSettings).where(BotSettings.key == 'bot_active')
+                result = await session.execute(query)
+                setting = result.scalar_one_or_none()
+
+                interval = CHECK_INTERVAL
+                if setting and setting.value_int:
+                    interval = setting.value_int
+
+                # Проверяем статус бота
+                status_query = select(BotSettings).where(BotSettings.key == 'bot_active')
+                status_result = await session.execute(status_query)
+                status_setting = status_result.scalar_one_or_none()
+
+                is_active = True
+                if status_setting is not None and status_setting.value_bool is not None:
+                    is_active = status_setting.value_bool
+                
+                if not is_active:
+                    logger.info('Бот не активен, пропускаем проверку дивергенций')
+                    break
+
+                notification_service = NotificationService(bot, session)
+                await notification_service.send_divergence_notification('test')
+
+                logger.info(f"Следующая проверка через {interval} секунд")
+                break
+        except Exception as e:
+            logger.error(f"Ошибка при проверке дивергенций: {str(e)}")
+
+        await asyncio.sleep(interval)
+
 # Функция для запуска бота
 async def main():
     from app.handlers import common
@@ -53,6 +96,9 @@ async def main():
 
     # Устанавливаем комманды бота
     await set_bot_commands()
+
+    # Запускаем фоновую задачу проверки дивергенций
+    asyncio.create_task(check_divergence_task())
 
     # Запуск бота
     await dp.start_polling(bot)

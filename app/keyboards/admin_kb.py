@@ -35,6 +35,19 @@ def get_bot_control_kb(is_active: bool) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
+def get_pairs_menu_kb() -> InlineKeyboardMarkup:
+    """Создает клавиатуру для меню управления валютными парами"""
+    kb = InlineKeyboardBuilder()
+
+    kb.button(text='➕ Добавить валютную пару', callback_data='add_pair')
+    kb.button(text='📋 Список валютных пар', callback_data='list_pairs')
+    kb.button(text='🔙 Назад', callback_data='admin_main_menu')
+
+    kb.adjust(1)
+
+    return kb.as_markup()
+
+
 def get_settings_menu_kb() -> InlineKeyboardMarkup:
     """Создает клавиатуру для меню настроек"""
     kb = InlineKeyboardBuilder()
@@ -49,7 +62,7 @@ def get_settings_menu_kb() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def get_back(callback_data: str) -> InlineKeyboardMarkup:
+def get_back_kb(callback_data: str) -> InlineKeyboardMarkup:
     """Создает клавиатуру с кнопкой 'Назад'"""
     kb = InlineKeyboardBuilder()
     kb.button(text='🔙 Назад', callback_data=callback_data)
@@ -66,7 +79,7 @@ def get_pairs_list_kb(pairs: List[CurrencyPair]) -> InlineKeyboardMarkup:
     for pair in sorted_pairs:
         status_emoji = '🟢' if pair.is_active else '🔴'
         kb.button(
-            text=f'{status_emoji} {pair.symbol}'
+            text=f'{status_emoji} {pair.symbol}',
             callback_data=f'pair_{pair.id}'
         )
     

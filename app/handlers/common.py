@@ -19,7 +19,6 @@ async def cmd_start(message: Message):
         "Для управления ботом используйте команду /admin",
         reply_markup=get_start_kb()
     )
-    print(message.from_user)
 
 @router.message(Command('help'))
 async def cmd_help(message: Message):
@@ -76,5 +75,5 @@ async def cb_about(callback: CallbackQuery):
 async def cb_admin_panel(callback: CallbackQuery, session: AsyncSession):
     """Обработчик кнопки 'Админ-панель'"""
     await callback.message.answer('Переход в панель администратора...')
-    await process_admin_panel(callback.from_user, session)
+    await process_admin_panel(callback, session)
     await callback.answer()

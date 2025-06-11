@@ -8,7 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.database.models import Admin, CurrencyPair, BotSettings
 from app.keyboards.admin_kb import (
-    get_admin_main_menu
+    get_admin_main_menu,
+    get_bot_control_kb,
+    get_pairs_menu_kb,
+    get_settings_menu_kb,
+    get_back_kb
 )
 from app.config import SUPERADMIN_IDS
 
@@ -18,7 +22,7 @@ router = Router()
 
 async def process_admin_panel(message: Message, session: AsyncSession):
     user_id = message.from_user.id
-    print(user_id)
+    
     # Проверяем пользователя на администратов
     query = select(Admin).where(Admin.user_id == user_id)
     result = await session.execute(query) # type: ignore
@@ -46,7 +50,7 @@ async def process_admin_panel(message: Message, session: AsyncSession):
         return
     else:
         await message.answer('👋 Добро пожаловать в админ-панель!')
-
+    
     # Отправляем главное меню
     await show_admin_main_menu(message)
 
@@ -72,3 +76,78 @@ async def cb_admin_main_menu(callback: CallbackQuery):
         parse_mode='HTML'
     )
     await callback.answer()
+
+@router.callback_query(F.data == 'bot_control')
+async def cb_bot_control(callback: CallbackQuery, session: AsyncSession):
+    """Управление состоянием бота (вкл/выкл)"""
+    # Получаем текущий статус бота
+    query = select(BotSettings).where(BotSettings.key == 'bot_active')
+    result = await session.execute(query)
+    setting = result.scalar_one_or_none()
+
+    is_active = True # По умолчанию бот активен
+    if setting is not None and setting.value_bool is not None:
+        is_active = setting.value_bool
+
+    status_text = '🟢 Активен' if is_active else '🔴 Остановлен'
+
+    await callback.message.edit_text(
+        f"⚙️ <b>Управление ботом</b>\n\n"
+        f"Текущий статус: {status_text}\n\n"
+        "Выберите действие:",
+        reply_markup=get_bot_control_kb(is_active),
+        parse_mode='HTML'
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == 'bot_activate')
+async def cb_bot_active(callback: CallbackQuery, session: AsyncSession):
+    """Активация бота"""
+    # Получаем текущую настройку
+    query = select(BotSettings).where(BotSettings.key == 'bot_active')
+    result = await session.execute(query)
+    setting = result.scalar_one_or_none()
+
+    if setting is None:
+        # Создаем настройку, если она не существует
+        setting = BotSettings(key='bot_active', value_bool=True)
+        session.add(setting)
+    else:
+        setting.value_bool = True
+
+    await session.commit()
+
+    await callback.message.edit_text(
+        "⚙️ <b>Управление ботом</b>\n\n"
+        "Текущий статус: 🟢 Активен\n\n"
+        "Бот успешно активирован и будет отправлять уведомления о дивергенциях.",
+        reply_markup=get_bot_control_kb(True),
+        parse_mode='HTML'
+    )
+    await callback.answer('✅ Бот активирован')
+
+@router.callback_query(F.data == 'bot_deactivate')
+async def cb_bot_deactivate(callback: CallbackQuery, session: AsyncSession):
+    """Деактивация бота"""
+    # Получаем текущую настройку
+    query = select(BotSettings).where(BotSettings.key == 'bot_active')
+    result = await session.execute(query)
+    setting = result.scalar_one_or_none()
+
+    if setting is None:
+        # Создаем настройку, если она не существует
+        setting = BotSettings(key='bot_active', value_bool=False)
+        session.add(setting)
+    else:
+        setting.value_bool = False
+
+    await session.commit()
+
+    await callback.message.edit_text(
+        "⚙️ <b>Управление ботом</b>\n\n"
+        "Текущий статус: 🔴 Остановлен\n\n"
+        "Бот остановлен и не будет отправлять уведомления о дивергенциях.",
+        reply_markup=get_bot_control_kb(False),
+        parse_mode='HTML'
+    )
+    await callback.answer('✅ Бот остановлен')
