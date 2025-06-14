@@ -101,8 +101,8 @@ def get_pair_actions_kb(pair_id: int, is_active: bool) -> InlineKeyboardMarkup:
         kb.button(text='🟢 Активировать', callback_data=f'toggle_pair_{pair_id}')
     
     kb.button(text='✏️ Изменить порог дивергенции', callback_data=f'edit_threshold_{pair_id}')
-    kb.button(text='🗑 Удалить пару', callbakc_data=f'delete_pair_{pair_id}')
-    kb.button(text='🔙 Назад', callback_data='list_pair')
+    kb.button(text='🗑 Удалить пару', callback_data=f'delete_pair_{pair_id}')
+    kb.button(text='🔙 Назад', callback_data='list_pairs')
 
     kb.adjust(1)
 

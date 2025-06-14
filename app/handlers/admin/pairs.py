@@ -149,4 +149,220 @@ async def process_add_pair_threshold(message: Message, state: FSMContext, sessio
 
     await state.clear()
 
+@router.callback_query(F.data == 'list_pairs')
+async def cb_list_pairs(callback: CallbackQuery, session: AsyncSession):
+    """Просмотр списка валютных пар"""
+    # Получаем все пары из базы
+    query = select(CurrencyPair)
+    result = await session.execute(query)
+    pairs = result.scalars().all()
+
+    if not pairs:
+        await callback.message.edit_text(
+            "📊 <b>Список валютных пар</b>\n\n"
+            "Пока не добавлено ни одной валютной пары.",
+            reply_markup=get_back_kb('pairs_management'),
+            parse_mode='HTML'
+        )
+        await callback.answer()
+        return
     
+    await callback.message.edit_text(
+        "📊 <b>Список валютных пар</b>\n\n"
+        "Выберите пару для управления:",
+        reply_markup=get_pairs_list_kb(pairs),
+        parse_mode='HTML'
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith('pair_'))
+async def cb_pair_details(callback: CallbackQuery, session: AsyncSession):
+    """Показать детали и действия для выбранной валютной пары"""
+    pair_id = int(callback.data.split('_')[1])
+
+    # Получаем информацию о паре
+    query = select(CurrencyPair).where(CurrencyPair.id == pair_id)
+    result = await session.execute(query)
+    pair = result.scalar_one_or_none()
+
+    if not pair:
+        await callback.message.exit_text(
+            '❌ Валютная пара не найдена.',
+            reply_markup=get_back_kb('list_pairs')
+        )
+        await callback.answer()
+        return
+    
+    status = "🟢 Активна" if pair.is_active else "🔴 Не активна"
+
+    await callback.message.edit_text(
+        f"📊 <b>Валютная пара {pair.symbol}</b>\n\n"
+        f"Базовый актив: {pair.base_asset}\n"
+        f"Котируемый актив: {pair.quote_asset}\n"
+        f"Порог дивергенции: {pair.devergence_threshold}%\n"
+        f"Статус: {status}\n\n"
+        "Выберите действие:",
+        reply_markup=get_pair_actions_kb(pair.id, pair.is_active),
+        parse_mode='HTML'
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith('toggle_pair_'))
+async def cb_toggle_pair(callback: CallbackQuery, session: AsyncSession):
+    """Изменить статус активности валютной пары"""
+    pair_id = int(callback.data.split('_')[2])
+
+    # Получаем информацию о паре
+    query = select(CurrencyPair).where(CurrencyPair.id == pair_id)
+    result = await session.execute(query)
+    pair = result.scalar_one_or_none()
+
+    if not pair:
+        await callback.message.edit(
+            '❌ Валютная пара не найдена.',
+            reply_markup=get_back_kb('list_pairs')
+        )
+        await callback.answer()
+        return
+
+    # Меняем статус на противоположный
+    pair.is_active = not pair.is_active
+    await session.commit()
+
+    new_status = "🟢 Активна" if pair.is_active else "🔴 Не активна"
+    action_text = "активирована" if pair.is_active else "деактивирована"
+
+    await callback.message.edit_text(
+        f"✅ Валютная пара {pair.symbol} успешно {action_text}!\n\n"
+        f"Базовый актив: {pair.base_asset}\n"
+        f"Котируемый актив: {pair.quote_asset}\n"
+        f"Порог дивергенции: {pair.devergence_threshold}%\n"
+        f"Статус: {new_status}",
+        reply_markup=get_pair_actions_kb(pair.id, pair.is_active),
+        parse_mode='HTML'
+    )
+    await callback.answer(f"✅ Пара {action_text}")
+
+@router.callback_query(F.data.startswith('edit_threshold_'))
+async def cb_edit_threshold(callback: CallbackQuery, state: FSMContext):
+    """Изменить порог дивергенции для валютной пары"""
+    pair_id = int(callback.data.split('_')[2])
+
+    await state.update_data(pair_id=pair_id)
+    await state.set_state(AdminStates.edit_threshold)
+
+    await callback.message.edit_text(
+        "📝 <b>Изменение порога дивергенции</b>\n\n"
+        "Введите новое значение порога в процентах (например, 5.0):",
+        reply_markup=get_back_kb(f'pair_{pair_id}'),
+        parse_mode='HTML'
+    )
+    await callback.answer()
+
+@router.message(StateFilter(AdminStates.edit_threshold))
+async def process_edit_threshold(message: Message, state: FSMContext, session: AsyncSession):
+    """Обработка ввода нового порога дивергенции"""
+    try:
+        threshold = float(message.text.strip().replace(',', '.'))
+        if threshold < 0:
+            raise ValueError('Порог должен быть положительным числом')
+    except ValueError:
+        await message.answer(
+            '❌ Пожалуйста, введите положительное число. Например, 5.0',
+            reply_markup=get_back_kb('pairs_management')
+        )
+        return
+    
+    # Получаем ID пары из состояния
+    data = await state.get_data()
+    pair_id = data.get('pair_id')
+
+    # Обновляем порог
+    query = select(CurrencyPair).where(CurrencyPair.id == pair_id)
+    result = await session.execute(query)
+    pair = result.scalar_one_or_none()
+
+    if not pair:
+        await message.answer(
+            '❌ Валютная пара не найдена.',
+            reply_markup=get_back_kb('pair_management')
+        )
+        await state.clear()
+        return
+    
+    pair.devergence_threshold = threshold
+    await session.commit()
+
+    status = "🟢 Активна" if pair.is_active else "🔴 Не активна"
+
+    await message.answer(
+        f"✅ Порог дивергенции для {pair.symbol} успешно изменен!\n\n"
+        f"Базовый актив: {pair.base_asset}\n"
+        f"Котируемый актив: {pair.quote_asset}\n"
+        f"Новый порог дивергенции: {threshold}%\n"
+        f"Статус: {status}",
+        reply_markup=get_pair_actions_kb(pair.id, pair.is_active)
+    )
+
+    await state.clear()
+
+@router.callback_query(F.data.startswith('delete_pair_'))
+async def cb_confirm_delete_pair(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+    """Подтверждение удаления валютной пары"""
+    pair_id = int(callback.data.split('_')[2])
+
+    # Получаем информацию о паре
+    query = select(CurrencyPair).where(CurrencyPair.id == pair_id)
+    result = await session.execute(query)
+    pair = result.scalar_one_or_none()
+
+    if not pair:
+        await callback.message.exit_text(
+            '❌ Валютная пара не найдена.',
+            reply_markup=get_back_kb('list_pairs')
+        )
+        await callback.answer()
+        return
+    
+    await state.update_data(pair_id=pair_id, pair_symbol=pair.symbol)
+
+    await callback.message.edit_text(
+        f"⚠️ <b>Подтверждение удаления</b>\n\n"
+        f"Вы уверены, что хотите удалить валютную пару {pair.symbol}?\n\n"
+        "Это действие нельзя отменить.",
+        reply_markup=get_confirm_kb(f'confirm_delete_{pair_id}', f'pair_{pair_id}'),
+        parse_mode='HTML'
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith('confirm_delete_'))
+async def cb_delete_pair(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+    """Удаление валютной пары"""
+    pair_id = int(callback.data.split("_")[2])
+    
+    # Получаем информацию о паре
+    query = select(CurrencyPair).where(CurrencyPair.id == pair_id)
+    result = await session.execute(query)
+    pair = result.scalar_one_or_none()
+    
+    if not pair:
+        await callback.message.edit_text(
+            "❌ Валютная пара не найдена.",
+            reply_markup=get_back_kb("list_pairs")
+        )
+        await callback.answer()
+        return
+    
+    pair_symbol = pair.symbol
+    
+    # Удаляем пару
+    await session.delete(pair)
+    await session.commit()
+    
+    await callback.message.edit_text(
+        f"✅ Валютная пара {pair_symbol} успешно удалена!",
+        reply_markup=get_back_kb("list_pairs")
+    )
+    await callback.answer("✅ Пара удалена")
+    await state.clear()
+
