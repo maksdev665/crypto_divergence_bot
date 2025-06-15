@@ -10,7 +10,10 @@ from app.config import BOT_TOKEN, CHECK_INTERVAL
 from app.database.engine import get_session
 from app.database.models import BotSettings
 from app.middlewares.admin_middleware import AdminMiddleware
+from app.services.binance_api import BinanceAPI
+from app.services.divergence import DivergenceAnalyzer
 from app.services.notifications import NotificationService
+
 
 
 
@@ -46,7 +49,7 @@ async def check_divergence_task():
             # Создаем новую сессию для каждой итерации
             async for session in get_session():
                 # Получаем текущий интервал проверки из настроек
-                query = select(BotSettings).where(BotSettings.key == 'bot_active')
+                query = select(BotSettings).where(BotSettings.key == 'check_interval')
                 result = await session.execute(query)
                 setting = result.scalar_one_or_none()
 
@@ -67,11 +70,28 @@ async def check_divergence_task():
                     logger.info('Бот не активен, пропускаем проверку дивергенций')
                     break
 
+                # Создаем сервисы
+                binance_api = BinanceAPI()
+                divergence_analyzer = DivergenceAnalyzer(session, binance_api)
                 notification_service = NotificationService(bot, session)
-                await notification_service.send_divergence_notification('test')
 
+                # Проверяем дивергенции
+                logger.info('Проверка дивергенций...')
+                divergences = await divergence_analyzer.check_all_pairs()
+
+                if divergences:
+                    logger.info(f"Обнаружено {len(divergences)} дивергенций")
+                    # Отправляем уведомления
+                    for divergence in divergences:
+                        success = await notification_service.send_divergence_notificaton(divergence)
+                        if success:
+                            await divergence_analyzer.mark_as_notified(divergence.id)
+                else:
+                    logger.info('Дивергенций не обнаружено')
+            
                 logger.info(f"Следующая проверка через {interval} секунд")
                 break
+                
         except Exception as e:
             logger.error(f"Ошибка при проверке дивергенций: {str(e)}")
 

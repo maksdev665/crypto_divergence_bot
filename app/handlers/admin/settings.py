@@ -87,27 +87,27 @@ async def process_set_group_id(message: Message, state: FSMContext, session: Asy
     await state.clear()
 
 
-@router.callback_query(F.data == 'set_check_interval')
+@router.callback_query(F.data == "set_check_interval")
 async def cb_set_check_interval(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
     """Настройка интервала проверки дивергенций"""
     # Получаем текущее значение
-    query = select(BotSettings).where(BotSettings.key == 'check_interval')
+    query = select(BotSettings).where(BotSettings.key == "check_interval")
     result = await session.execute(query)
     setting = result.scalar_one_or_none()
-
+    
     current_value = CHECK_INTERVAL
     if setting and setting.value_int:
         current_value = setting.value_int
-
-    # Переводим секунды в минуты для удобство
+    
+    # Переводим секунды в минуты для удобства
     current_minutes = current_value // 60
-
+    
     await callback.message.edit_text(
         "⏱ <b>Настройка интервала проверки</b>\n\n"
         f"Текущее значение: {current_minutes} минут\n\n"
         "Пожалуйста, введите интервал проверки дивергенций в минутах (от 1 до 60):",
-        reply_markup=get_back_kb('bot_settings'),
-        parse_mode='HTML'
+        reply_markup=get_back_kb("bot_settings"),
+        parse_mode="HTML"
     )
     
     await state.set_state(AdminStates.set_check_interval)
@@ -120,35 +120,35 @@ async def process_set_check_interval(message: Message, state: FSMContext, sessio
     try:
         interval_minutes = int(message.text.strip())
         if interval_minutes < 1 or interval_minutes > 60:
-            raise ValueError('Интервал должен быть от 1 до 60 минут')
+            raise ValueError("Интервал должен быть от 1 до 60 минут")
     except ValueError:
         await message.answer(
-            '❌ Пожалуйста, введите целое число от 1 до 60.',
-            reply_markup=get_back_kb('bot_settings')
+            "❌ Пожалуйста, введите целое число от 1 до 60.",
+            reply_markup=get_back_kb("bot_settings")
         )
         return
     
     # Переводим минуты в секунды
     interval_seconds = interval_minutes * 60
-
+    
     # Сохраняем настройку
-    query = select(BotSettings).where(BotSettings.key == 'check_interal')
+    query = select(BotSettings).where(BotSettings.key == "check_interval")
     result = await session.execute(query)
     setting = result.scalar_one_or_none()
-
+    
     if setting is None:
-        setting = BotSettings(key='check_interval', value_int=interval_seconds)
+        setting = BotSettings(key="check_interval", value_int=interval_seconds)
         session.add(setting)
     else:
         setting.value_int = interval_seconds
-
+    
     await session.commit()
-
+    
     await message.answer(
         f"✅ Интервал проверки дивергенций успешно установлен: {interval_minutes} минут",
-        reply_markup=get_back_kb('bot_settings')
+        reply_markup=get_back_kb("bot_settings")
     )
-
+    
     await state.clear()
 
 
