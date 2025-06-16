@@ -78,12 +78,12 @@ async def check_divergence_task():
                 # Проверяем дивергенции
                 logger.info('Проверка дивергенций...')
                 divergences = await divergence_analyzer.check_all_pairs()
-
+                await notification_service.send_test('divergence')
                 if divergences:
                     logger.info(f"Обнаружено {len(divergences)} дивергенций")
                     # Отправляем уведомления
                     for divergence in divergences:
-                        success = await notification_service.send_divergence_notificaton(divergence)
+                        success = await notification_service.send_divergence_notification(divergence)
                         if success:
                             await divergence_analyzer.mark_as_notified(divergence.id)
                 else:

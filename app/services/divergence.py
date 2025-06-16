@@ -107,8 +107,8 @@ class DivergenceAnalyzer:
             pair1_price=prices[pair1.symbol],
             pair2_price=prices[pair2.symbol],
             divergence_percent=divergence_percent,
-            desciption=description,
-            detected_at=datetime.now(timezone.utc()),
+            description=description,
+            detected_at=datetime.now(timezone.utc),
             notification_sent=False
         )
 
@@ -157,7 +157,7 @@ class DivergenceAnalyzer:
         Проверяет, была ли недавно зарегистрирована дивергенция между теми же парами
         чтобы избежать частых дублирующих уведомлений
         """
-        one_hour_ago = datetime.now(timezone.utc()) - timedelta(hour=1)
+        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
 
         # Проверяем в обоих направлениях (pair1-pair2 и pair2-pair1)
         query = select(Divergence).where(
@@ -166,7 +166,7 @@ class DivergenceAnalyzer:
                     and_(Divergence.pair1_id == pair1_id, Divergence.pair2_id == pair2_id),
                     and_(Divergence.pair1_id == pair1_id, Divergence.pair2_id == pair2_id)
                 ),
-                Divergence.detected_id >= one_hour_ago
+                Divergence.detected_at >= one_hour_ago
             )
         )
 

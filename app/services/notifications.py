@@ -60,9 +60,6 @@ class NotificationService:
 
         return message
     
-    async def test_message(self) -> str:
-        return '📈 Пары <b>расходятся</b>'
-    
     async def send_divergence_notification(self, divergence: Divergence) -> bool:
         """Отправляет уведомление о дивергенции в Telegram группу"""
         # Проверяем, активен ли бот
