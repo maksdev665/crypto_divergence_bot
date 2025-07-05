@@ -78,7 +78,7 @@ async def check_divergence_task():
                 # Проверяем дивергенции
                 logger.info('Проверка дивергенций...')
                 divergences = await divergence_analyzer.check_all_pairs()
-                await notification_service.send_test('divergence')
+                
                 if divergences:
                     logger.info(f"Обнаружено {len(divergences)} дивергенций")
                     # Отправляем уведомления
